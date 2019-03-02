@@ -33,6 +33,14 @@
   "Completion backend for etags."
   :group 'company)
 
+(defcustom company-etags-update-interval 60
+  "The interval (seconds) to update candidate cache.
+Function `tags-completion-table' sets up variable `tags-completion-table'
+by parsing tags files.
+The interval stops the function being called too frequently."
+  :group 'company
+  :type 'integer)
+
 (defcustom company-etags-use-main-table-list t
   "Always search `tags-table-list' if set.
 If this is disabled, `company-etags' will try to find the one table for each
@@ -56,6 +64,9 @@ Set it to t or to a list of major modes."
 
 (defvar company-etags-modes '(prog-mode c-mode objc-mode c++-mode java-mode
                               jde-mode pascal-mode perl-mode python-mode))
+
+(defvar company-etags-timer nil
+ "Timer to avoid calling function `tags-completion-table' too frequently.")
 
 (defvar-local company-etags-buffer-table 'unknown)
 
@@ -81,7 +92,17 @@ Set it to t or to a list of major modes."
     (and (or tags-file-name tags-table-list)
          (fboundp 'tags-completion-table)
          (save-excursion
-           (visit-tags-table-buffer)
+           (unless (and company-etags-timer
+                        tags-completion-table
+                        (> (length tags-completion-table) 0)
+                        (< (- (float-time (current-time)) (float-time company-etags-timer))
+                           company-etags-update-interval))
+             (setq company-etags-timer (current-time))
+             ;; `visit-tags-table-buffer' will check the modified time of tags file. If it's
+             ;; changed, the tags file is reloaded.
+             (visit-tags-table-buffer))
+           ;; In function `tags-completion-table', cached variable `tags-completion-table' is
+           ;; accessed at first. If the variable is empty, it is set by parsing tags file
            (all-completions prefix (tags-completion-table))))))
 
 ;;;###autoload
